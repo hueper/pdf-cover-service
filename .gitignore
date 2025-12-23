@@ -1,0 +1,16 @@
+# Build output
+target/
+
+# Generated files
+*.pdf
+
+# IDE files
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+
+# OS files
+.DS_Store
+Thumbs.db
