@@ -1,4 +1,4 @@
-package com.itextpdf.samples.sandbox.pdfua;
+package com.example;
 
 import com.itextpdf.forms.form.element.InputField;
 import com.itextpdf.io.font.PdfEncodings;

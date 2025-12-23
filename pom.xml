@@ -34,7 +34,7 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.1.0</version>
                 <configuration>
-                    <mainClass>com.itextpdf.samples.sandbox.pdfua.PdfUA</mainClass>
+                    <mainClass>com.example.PdfUA</mainClass>
                 </configuration>
             </plugin>
         </plugins>
