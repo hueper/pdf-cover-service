@@ -26,7 +26,7 @@ public class PdfUA {
     }
 
     public void manipulatePdf(String dest) throws IOException {
-        PdfDocument pdfDoc =  new PdfUADocument(new PdfWriter(dest),
+        PdfDocument pdfDoc = new PdfUADocument(new PdfWriter(dest),
                 new PdfUAConfig(PdfUAConformance.PDF_UA_1, "Some title", "en-US"));
         Document document = new Document(pdfDoc, PageSize.A4);
 
