@@ -2,10 +2,12 @@ package com.example;
 
 import com.itextpdf.kernel.geom.PageSize;
 import com.itextpdf.kernel.pdf.PdfDocument;
+import com.itextpdf.kernel.pdf.PdfDocumentInfo;
 import com.itextpdf.kernel.pdf.PdfName;
 import com.itextpdf.kernel.pdf.PdfPage;
 import com.itextpdf.kernel.pdf.PdfReader;
 import com.itextpdf.kernel.pdf.PdfStream;
+import com.itextpdf.kernel.pdf.PdfString;
 import com.itextpdf.kernel.pdf.PdfUAConformance;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.kernel.pdf.xobject.PdfImageXObject;
@@ -35,21 +37,52 @@ public class PdfUA {
     }
 
     public void createCoverPdf(Path sourcePdfPath, Path destPath) throws IOException {
-        createCoverPdf(sourcePdfPath, destPath, DEFAULT_TITLE, DEFAULT_LANGUAGE);
+        try (PdfDocument sourcePdf = new PdfDocument(new PdfReader(sourcePdfPath.toFile()))) {
+            String title = extractTitle(sourcePdf).orElse(DEFAULT_TITLE);
+            String language = extractLanguage(sourcePdf).orElse(DEFAULT_LANGUAGE);
+
+            createCoverPdf(sourcePdf, sourcePdfPath, destPath, title, language);
+        }
     }
 
     public void createCoverPdf(Path sourcePdfPath, Path destPath,
                                String title, String language) throws IOException {
         try (PdfDocument sourcePdf = new PdfDocument(new PdfReader(sourcePdfPath.toFile()))) {
-            PdfPage firstPage = sourcePdf.getFirstPage();
-            PageSize pageSize = new PageSize(firstPage.getPageSize());
-
-            PdfImageXObject sourceImage = extractFirstImage(firstPage)
-                    .orElseThrow(() -> new ImageExtractionException(
-                            "No image found on the first page: " + sourcePdfPath));
-
-            writeCoverPdf(destPath, pageSize, sourceImage, title, language);
+            createCoverPdf(sourcePdf, sourcePdfPath, destPath, title, language);
         }
+    }
+
+    private void createCoverPdf(PdfDocument sourcePdf, Path sourcePdfPath, Path destPath,
+                                String title, String language) throws IOException {
+        PdfPage firstPage = sourcePdf.getFirstPage();
+        PageSize pageSize = new PageSize(firstPage.getPageSize());
+
+        PdfImageXObject sourceImage = extractFirstImage(firstPage)
+                .orElseThrow(() -> new ImageExtractionException(
+                        "No image found on the first page: " + sourcePdfPath));
+
+        writeCoverPdf(destPath, pageSize, sourceImage, title, language);
+    }
+
+    private Optional<String> extractTitle(PdfDocument pdfDocument) {
+        PdfDocumentInfo info = pdfDocument.getDocumentInfo();
+        String title = info.getTitle();
+        if (title != null && !title.isBlank()) {
+            return Optional.of(title);
+        }
+        return Optional.empty();
+    }
+
+    private Optional<String> extractLanguage(PdfDocument pdfDocument) {
+        // Try to get language from the catalog's Lang entry
+        PdfString langString = pdfDocument.getCatalog().getPdfObject().getAsString(PdfName.Lang);
+        if (langString != null) {
+            String lang = langString.getValue();
+            if (lang != null && !lang.isBlank()) {
+                return Optional.of(lang);
+            }
+        }
+        return Optional.empty();
     }
 
     private void writeCoverPdf(Path destPath, PageSize pageSize,
