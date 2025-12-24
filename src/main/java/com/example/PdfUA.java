@@ -17,8 +17,11 @@ import com.itextpdf.pdfua.PdfUAConfig;
 import com.itextpdf.pdfua.PdfUADocument;
 
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 public class PdfUA {
@@ -28,12 +31,53 @@ public class PdfUA {
     private static final String COVER_ALT_TEXT = "Cover";
 
     public static void main(String[] args) throws Exception {
-        Path dest = Path.of("./target/sandbox/pdfua/pdf_ua.pdf");
-        Path source = Path.of("./src/main/resources/pdf/oa9783839431597.pdf");
+        Path sourceDir = Path.of("./src/main/resources/pdf");
+        Path destDir = Path.of("./target/sandbox/pdfua");
 
-        Files.createDirectories(dest.getParent());
+        Files.createDirectories(destDir);
 
-        new PdfUA().createCoverPdf(source, dest);
+        PdfUA pdfUA = new PdfUA();
+        List<Path> pdfFiles = pdfUA.findPdfFiles(sourceDir);
+
+        System.out.println("Found " + pdfFiles.size() + " PDF files to process");
+
+        int successCount = 0;
+        int failCount = 0;
+
+        for (Path sourcePdf : pdfFiles) {
+            String fileName = sourcePdf.getFileName().toString();
+            String outputFileName = fileName.replace(".pdf", "_cover.pdf");
+            Path destPath = destDir.resolve(outputFileName);
+
+            try {
+                pdfUA.createCoverPdf(sourcePdf, destPath);
+                System.out.println("✓ Processed: " + fileName + " -> " + outputFileName);
+                successCount++;
+            } catch (Exception e) {
+                System.err.println("✗ Failed to process: " + fileName + " - " + e.getMessage());
+                failCount++;
+            }
+        }
+
+        System.out.println("\nProcessing complete: " + successCount + " succeeded, " + failCount + " failed");
+    }
+
+    public List<Path> findPdfFiles(Path directory) throws IOException {
+        List<Path> pdfFiles = new ArrayList<>();
+
+        if (!Files.exists(directory) || !Files.isDirectory(directory)) {
+            throw new IOException("Directory does not exist or is not a directory: " + directory);
+        }
+
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(directory, "*.pdf")) {
+            for (Path entry : stream) {
+                if (Files.isRegularFile(entry)) {
+                    pdfFiles.add(entry);
+                }
+            }
+        }
+
+        return pdfFiles;
     }
 
     public void createCoverPdf(Path sourcePdfPath, Path destPath) throws IOException {
