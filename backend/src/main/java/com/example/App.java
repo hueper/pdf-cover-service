@@ -26,6 +26,11 @@ public class App {
     private Javalin createApp() {
         return Javalin.create(config -> {
             config.http.maxRequestSize = 50_000_000L; // 50MB max upload
+            config.bundledPlugins.enableCors(cors -> {
+                cors.addRule(it -> {
+                    it.anyHost();
+                });
+            });
         })
         .get("/", this::handleHealth)
         .get("/health", this::handleHealth)
