@@ -18,8 +18,11 @@ import com.itextpdf.pdfua.PdfUADocument;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -59,6 +62,67 @@ public class PdfUA {
         this.gson = new Gson();
         this.openAiApiKey = openAiApiKey;
     }
+
+    // ========== Stream-based methods for HTTP handling ==========
+
+    /**
+     * Creates a cover PDF from input stream and writes to output stream.
+     * This is the main entry point for HTTP requests.
+     */
+    public void createCoverPdf(InputStream pdfInput, OutputStream pdfOutput) throws IOException {
+        byte[] inputBytes = pdfInput.readAllBytes();
+        byte[] outputBytes = createCoverPdf(inputBytes, null, null);
+        pdfOutput.write(outputBytes);
+    }
+
+    /**
+     * Creates a cover PDF from input stream with custom title and language.
+     */
+    public void createCoverPdf(InputStream pdfInput, OutputStream pdfOutput,
+                               String title, String language) throws IOException {
+        byte[] inputBytes = pdfInput.readAllBytes();
+        byte[] outputBytes = createCoverPdf(inputBytes, title, language);
+        pdfOutput.write(outputBytes);
+    }
+
+    /**
+     * Creates a cover PDF from bytes and returns the result as bytes.
+     */
+    public byte[] createCoverPdf(byte[] pdfBytes, String titleOverride, String languageOverride) throws IOException {
+        try (PdfDocument sourcePdf = new PdfDocument(new PdfReader(new ByteArrayInputStream(pdfBytes)))) {
+            String title = titleOverride != null ? titleOverride 
+                    : extractTitle(sourcePdf).orElse(DEFAULT_TITLE);
+            String language = languageOverride != null ? languageOverride 
+                    : extractLanguage(sourcePdf).orElse(DEFAULT_LANGUAGE);
+
+            PdfPage firstPage = sourcePdf.getFirstPage();
+            PageSize pageSize = new PageSize(firstPage.getPageSize());
+
+            PdfImageXObject sourceImage = extractFirstImage(firstPage)
+                    .orElseThrow(() -> new ImageExtractionException("No image found on the first page"));
+
+            String altText = generateAltText(sourceImage, title);
+
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            writeCoverPdf(outputStream, pageSize, sourceImage, title, language, altText);
+            return outputStream.toByteArray();
+        }
+    }
+
+    /**
+     * Extracts metadata from a PDF.
+     */
+    public PdfMetadata extractMetadata(byte[] pdfBytes) throws IOException {
+        try (PdfDocument pdfDoc = new PdfDocument(new PdfReader(new ByteArrayInputStream(pdfBytes)))) {
+            return new PdfMetadata(
+                    extractTitle(pdfDoc).orElse(null),
+                    extractLanguage(pdfDoc).orElse(null),
+                    pdfDoc.getNumberOfPages()
+            );
+        }
+    }
+
+    // ========== File-based methods (original functionality) ==========
 
     public static void main(String[] args) throws Exception {
         Path sourceDir = Path.of("./src/main/resources/pdf");
@@ -140,11 +204,12 @@ public class PdfUA {
                 .orElseThrow(() -> new ImageExtractionException(
                         "No image found on the first page: " + sourcePdfPath));
 
-        // Generate alt text using OpenAI API
         String altText = generateAltText(sourceImage, title);
 
         writeCoverPdf(destPath, pageSize, sourceImage, title, language, altText);
     }
+
+    // ========== Alt text generation ==========
 
     private String generateAltText(PdfImageXObject image, String title) {
         if (openAiApiKey == null || openAiApiKey.isBlank()) {
@@ -152,10 +217,8 @@ public class PdfUA {
         }
 
         try {
-            // Convert image to PNG format for OpenAI compatibility
             byte[] pngBytes = convertToPng(image);
             String base64Image = Base64.getEncoder().encodeToString(pngBytes);
-
             return callOpenAiApi(base64Image, "image/png", title);
         } catch (Exception e) {
             System.err.println("Warning: Failed to generate alt text via OpenAI: " + e.getMessage());
@@ -163,27 +226,16 @@ public class PdfUA {
         }
     }
 
-    /**
-     * Converts a PDF image to PNG format.
-     * This ensures compatibility with OpenAI's vision API which only supports
-     * PNG, JPEG, GIF, and WebP formats.
-     */
     private byte[] convertToPng(PdfImageXObject pdfImage) throws IOException {
-        // Get the rendered BufferedImage from the PDF image
         BufferedImage bufferedImage = pdfImage.getBufferedImage();
-
         if (bufferedImage == null) {
             throw new IOException("Could not extract BufferedImage from PDF image");
         }
-
-        // Convert to PNG
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         boolean written = ImageIO.write(bufferedImage, "PNG", outputStream);
-
         if (!written) {
             throw new IOException("Failed to write image as PNG - no appropriate writer found");
         }
-
         return outputStream.toByteArray();
     }
 
@@ -212,19 +264,16 @@ public class PdfUA {
         requestBody.addProperty("max_tokens", 300);
 
         JsonArray messages = new JsonArray();
-
         JsonObject userMessage = new JsonObject();
         userMessage.addProperty("role", "user");
 
         JsonArray content = new JsonArray();
 
-        // Text part with instructions
         JsonObject textPart = new JsonObject();
         textPart.addProperty("type", "text");
         textPart.addProperty("text", buildPrompt(title));
         content.add(textPart);
 
-        // Image part
         JsonObject imagePart = new JsonObject();
         imagePart.addProperty("type", "image_url");
         JsonObject imageUrl = new JsonObject();
@@ -235,7 +284,6 @@ public class PdfUA {
 
         userMessage.add("content", content);
         messages.add(userMessage);
-
         requestBody.add("messages", messages);
 
         return requestBody;
@@ -254,17 +302,17 @@ public class PdfUA {
         JsonObject response = gson.fromJson(responseBody, JsonObject.class);
         JsonArray choices = response.getAsJsonArray("choices");
 
-        if (choices != null && choices.size() > 0) {
+        if (choices != null && !choices.isEmpty()) {
             JsonObject firstChoice = choices.get(0).getAsJsonObject();
             JsonObject message = firstChoice.getAsJsonObject("message");
             if (message != null) {
-                String content = message.get("content").getAsString();
-                return content.trim();
+                return message.get("content").getAsString().trim();
             }
         }
-
         return DEFAULT_ALT_TEXT;
     }
+
+    // ========== PDF utilities ==========
 
     private Optional<String> extractTitle(PdfDocument pdfDocument) {
         PdfDocumentInfo info = pdfDocument.getDocumentInfo();
@@ -276,7 +324,6 @@ public class PdfUA {
     }
 
     private Optional<String> extractLanguage(PdfDocument pdfDocument) {
-        // Try to get language from the catalog's Lang entry
         PdfString langString = pdfDocument.getCatalog().getPdfObject().getAsString(PdfName.Lang);
         if (langString != null) {
             String lang = langString.getValue();
@@ -296,10 +343,22 @@ public class PdfUA {
              Document document = new Document(pdfDoc, pageSize)) {
 
             document.setMargins(0, 0, 0, 0);
-
-            // Copy the image to the new document
             PdfImageXObject copiedImage = copyImageToDocument(sourceImage, pdfDoc);
+            Image coverImage = createFullPageImage(copiedImage, pageSize, altText);
+            document.add(coverImage);
+        }
+    }
 
+    private void writeCoverPdf(OutputStream outputStream, PageSize pageSize,
+                               PdfImageXObject sourceImage,
+                               String title, String language, String altText) throws IOException {
+        PdfUAConfig config = new PdfUAConfig(PdfUAConformance.PDF_UA_1, title, language);
+
+        try (PdfDocument pdfDoc = new PdfUADocument(new PdfWriter(outputStream), config);
+             Document document = new Document(pdfDoc, pageSize)) {
+
+            document.setMargins(0, 0, 0, 0);
+            PdfImageXObject copiedImage = copyImageToDocument(sourceImage, pdfDoc);
             Image coverImage = createFullPageImage(copiedImage, pageSize, altText);
             document.add(coverImage);
         }
@@ -336,6 +395,10 @@ public class PdfUA {
     private boolean isImageStream(PdfStream stream) {
         return stream != null && PdfName.Image.equals(stream.getAsName(PdfName.Subtype));
     }
+
+    // ========== DTOs and Exceptions ==========
+
+    public record PdfMetadata(String title, String language, int pageCount) {}
 
     public static class ImageExtractionException extends IOException {
         public ImageExtractionException(String message) {
