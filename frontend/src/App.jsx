@@ -26,6 +26,7 @@ import {
   Settings,
   ExpandMore,
   ExpandLess,
+  GitHub
 } from '@mui/icons-material'
 
 // Dark theme with custom palette
@@ -501,17 +502,26 @@ function App() {
 
           {/* Footer */}
           <Box sx={{ textAlign: 'center', mt: 6, color: 'text.secondary' }}>
-            <Typography variant="body2">
-              Powered by{' '}
-              <Link
-                href={apiUrl}
-                target="_blank"
-                rel="noopener"
-                sx={{ color: 'primary.main' }}
-              >
-                PDF Cover Service
-              </Link>
-            </Typography>
+            <Link
+              href="https://github.com/hueper/pdf-cover-service"
+              target="_blank"
+              rel="noopener"
+              sx={{ 
+                color: 'text.secondary',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 1,
+                textDecoration: 'none',
+                '&:hover': {
+                  color: 'text.primary',
+                },
+              }}
+            >
+              <GitHub />
+              <Typography variant="body2" component="span">
+                View on GitHub
+              </Typography>
+            </Link>
           </Box>
         </Container>
       </Box>
