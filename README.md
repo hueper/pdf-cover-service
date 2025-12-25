@@ -2,7 +2,7 @@
 
 Extract accessible, PDF/UA-compliant cover pages from PDF files. Automatically generates alt text for cover images using OpenAI's vision API.
 
-**Demo:** https://pdf-cover-service.onrender.com
+**Demo:** https://pdf-cover.onrender.com/
 
 ## Features
 
