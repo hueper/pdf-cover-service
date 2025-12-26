@@ -12,6 +12,32 @@ Extract accessible, PDF/UA-compliant cover pages from PDF files. Automatically g
 - REST API with health check, cover generation, and metadata extraction
 - React frontend with drag & drop, batch processing
 
+## How This Could Be Used
+
+If you're a publisher, printer, or content distributor dealing with large PDF catalogs, this service demonstrates a pattern you can adapt:
+
+### Batch Processing Pipeline
+Integrate the `/cover` endpoint into your existing workflows. Feed it PDFs via script, CI/CD pipeline, or queue-based system to generate accessible covers at scale.
+
+```bash
+for pdf in ./catalog/*.pdf; do
+  curl -X POST -F "file=@$pdf" https://your-instance.com/cover -o "./covers/$(basename $pdf)"
+done
+```
+
+### Accessibility Compliance
+The generated PDFs are PDF/UA-1 compliant out of the box—tagged structure, proper metadata, and alt text for images. Useful if you need to meet WCAG or PDF/UA requirements without manual tagging.
+
+### Extend for Other Use Cases
+The core logic in `PdfUA.java` can be adapted for:
+- Generating thumbnail previews for web shops
+- Extracting and repackaging specific pages
+- Adding watermarks or metadata in bulk
+- Creating accessible versions of legacy PDFs
+
+### Self-Host for Control
+Deploy your own instance via Docker to keep documents internal, avoid rate limits, and customize the processing logic to your needs.
+
 ## Quick Start
 
 ### Backend (Java)
